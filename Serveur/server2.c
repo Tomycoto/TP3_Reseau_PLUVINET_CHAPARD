@@ -117,10 +117,24 @@ static void app(void)
                }
                else 
                {
-                  char* bufferCopy = malloc(sizeof(char)*strlen(buffer));
+                  char bufferCopy[strlen(buffer)];
                   Client receiver;
                   char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
                   char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "#");
+                  /*char* check_if_at = strtok(strcpy(bufferCopy,buffer), "#");
+                  char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "@");
+                  char* next_at = strtok(NULL, "@");
+                  if (next_at!=NULL) //sinon on a un seul destinataire
+                  {
+                     printf("check : %s\n", check_if_hashtag);
+                     memcpy( check_if_hashtag+strlen(check_if_hashtag), "@", 1);
+                     memcpy( check_if_hashtag+strlen(check_if_hashtag)+1,next_at, strlen(next_at) );
+                     check_if_hashtag[strlen(check_if_hashtag)+1+strlen(next_at)] = '\0';
+   
+                     //strncat(check_if_hashtag, "@", strlen(check_if_hashtag)+strlen(next_at)+1);
+                     //strncat(check_if_hashtag, next_at, strlen(check_if_hashtag)+strlen(next_at)+1);
+                  }
+                  printf("%s --- %s\n", check_if_hashtag, next_at);*/
                   if (strlen(check_if_at)==strlen(buffer)-1)
                   {
                      char* receiverName = strtok(check_if_at, " ");
@@ -144,10 +158,14 @@ static void app(void)
                   else if (strlen(check_if_hashtag)==strlen(buffer)-1)
                   {
                      Client group_members[MAX_CLIENTS];
-                     char* group = strtok(check_if_hashtag,"#");
-                     char* current_person=strcat(group, "#");
+                     char* group_name;
+                     char* current_person=strtok(check_if_hashtag, "+");
+                     //char* current_person=strtok(check_if_hashtag, "@");
+                     char* previous_person="";
                      int k=0;
-                     while(strcmp(current_person, "#")!=0)
+                     int ch = ' ';
+      
+                     while(strchr(current_person,ch)==NULL)
                      {
                         int receiverFound = 0;
                         for (int j=0; j<actual; j++)
@@ -161,18 +179,33 @@ static void app(void)
                         }
                         if (!receiverFound)
                         {
-                           write_client(client.sock, "Utilisateur introuvable");
+                           write_client(client.sock, "Un utilisateur est introuvable");
                         }
-                        current_person = strtok(NULL, " ");
+                        previous_person= current_person;
+                        current_person = strtok(NULL, "+");
+                        //current_person = strtok(NULL, "@");
                         k++;
                      }
-                     Client* group_members_reduced = malloc(k*sizeof(Client));
-                     for (int m=0;m<k;m++)
+
+                     current_person = strtok(current_person, " ");
+                     int receiverFound = 0;
+                     for (int j=0; j<actual; j++)
                      {
-                        group_members_reduced[m]=group_members[m];
+                        if (strcmp(current_person, clients[j].name)==0)
+                        {
+                           group_members[k] = clients[j];
+                           receiverFound = 1;
+                           break;
+                        }
                      }
+                     if (!receiverFound)
+                     {
+                        write_client(client.sock, "Utilisateur introuvable");
+                     }
+                     k++;
                      char * message_to_send = strtok(NULL, "\n");
-                     send_message_to_all_clients(group_members_reduced, client, actual, message_to_send, 0);
+                     printf("Message : %s\n", message_to_send);
+                     send_message_to_all_clients(group_members, client, k, message_to_send, 0);
                   }
                   else
                   {
@@ -206,7 +239,7 @@ static void remove_client(Client *clients, int to_remove, int *actual)
    (*actual)--;
 }
 
-static void write_discution_in_file(char* path, char* receiver_name, char* sender_name, char* message)
+static void write_discution_in_file_private(char* path, char* receiver_name, char* sender_name, char* message)
 {
    char *concatSend = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
    memcpy( concatSend, path, strlen(path) );
@@ -237,8 +270,34 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
    int i = 0;
    char message[BUF_SIZE];
    char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
-   //char copy_msg[BUF_SIZE];
    message[0] = 0;
+   char heading[strlen(sender.name)];
+   strcpy(heading,sender.name);
+   int all=0;
+   strncat(heading," to ",sizeof message - strlen(message) - 1);
+   printf("Buffer3 : %s\n", buffer);
+   for (int j=0; j<actual-1; j++)
+   {
+      if (strcmp(clients[j].name,sender.name)==0)
+      {
+         strcpy(heading,sender.name);
+         strncat(heading," to all",sizeof message - strlen(message) - 1);
+         all=1;
+         break;
+      }
+      strncat(heading,clients[j].name,sizeof message - strlen(message) - 1);
+      strncat(heading,", ",sizeof message - strlen(message) - 1);
+   }
+   if (strcmp(clients[actual-1].name,sender.name)==0 && !all)
+   {
+      strcpy(heading,sender.name);
+      strncat(heading," to all",sizeof message - strlen(message) - 1);
+      all=1;
+   }
+   if (!all)
+   {
+      strncat(heading,clients[actual-1].name,sizeof message - strlen(message) - 1);
+   }
    for(i = 0; i < actual; i++)
    {
       /* we don't send message to the sender */
@@ -246,12 +305,12 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
       {
          if(from_server == 0)
          {
-            strncpy(message, sender.name, BUF_SIZE - 1);
+            strncpy(message, heading, BUF_SIZE - 1);
             strncat(message, " : ", sizeof message - strlen(message) - 1);
          }
          strncat(message, buffer, sizeof message - strlen(message) - 1);
          write_client(clients[i].sock, message);
-         write_discution_in_file(path_of_msg, clients[i].name, sender.name, message);
+         write_discution_in_file_private(path_of_msg, clients[i].name, sender.name, message);
       }
    }
 }
@@ -260,6 +319,7 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
 {
    int i = 0;
    char message[BUF_SIZE];
+   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
    message[0] = 0;
    /* we don't send message to the sender */
    if(sender.sock != receiver.sock)
@@ -267,10 +327,13 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
       if(from_server == 0)
       {
          strncpy(message, sender.name, BUF_SIZE - 1);
+         strncat(message, " to ", sizeof message - strlen(message) - 1);
+         strncat(message, receiver.name, sizeof message - strlen(message) - 1);
          strncat(message, " : ", sizeof message - strlen(message) - 1);
       }
       strncat(message, buffer, sizeof message - strlen(message) - 1);
       write_client(receiver.sock, message);
+      write_discution_in_file_private(path_of_msg, receiver.name, sender.name, message);
    }
 }
 
