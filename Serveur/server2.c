@@ -118,11 +118,12 @@ static void app(void)
                else 
                {
                   char* bufferCopy = malloc(sizeof(char)*strlen(buffer));
-                  strcpy(bufferCopy,buffer);
                   Client receiver;
-                  if (strcmp(strtok(bufferCopy, " "),"@")==0)
+                  char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
+                  char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "#");
+                  if (strlen(check_if_at)==strlen(buffer)-1)
                   {
-                     char* receiverName = strtok(NULL, " ");
+                     char* receiverName = strtok(check_if_at, " ");
                      int receiverFound = 0;
                      for (int j=0; j<actual; j++)
                      {
@@ -134,18 +135,50 @@ static void app(void)
                         }
                      }
                      if (receiverFound){
-                        char* messageToSend = strtok(NULL,"\n");
-                        send_message_to_one_client(receiver, client, messageToSend, 0);
+                        char* message_to_send = strtok(NULL,"\n");
+                        send_message_to_one_client(receiver, client, message_to_send, 0);
                      } else {
                         write_client(client.sock, "Utilisateur introuvable");
                      }
+                  }
+                  else if (strlen(check_if_hashtag)==strlen(buffer)-1)
+                  {
+                     Client group_members[MAX_CLIENTS];
+                     char* group = strtok(check_if_hashtag,"#");
+                     char* current_person=strcat(group, "#");
+                     int k=0;
+                     while(strcmp(current_person, "#")!=0)
+                     {
+                        int receiverFound = 0;
+                        for (int j=0; j<actual; j++)
+                        {
+                           if (strcmp(current_person, clients[j].name)==0)
+                           {
+                              group_members[k] = clients[j];
+                              receiverFound = 1;
+                              break;
+                           }
+                        }
+                        if (!receiverFound)
+                        {
+                           write_client(client.sock, "Utilisateur introuvable");
+                        }
+                        current_person = strtok(NULL, " ");
+                        k++;
+                     }
+                     Client* group_members_reduced = malloc(k*sizeof(Client));
+                     for (int m=0;m<k;m++)
+                     {
+                        group_members_reduced[m]=group_members[m];
+                     }
+                     char * message_to_send = strtok(NULL, "\n");
+                     send_message_to_all_clients(group_members_reduced, client, actual, message_to_send, 0);
                   }
                   else
                   {
                      send_message_to_all_clients(clients, client, actual, buffer, 0);
                   }
                }
-               
                break;
             }
          }
