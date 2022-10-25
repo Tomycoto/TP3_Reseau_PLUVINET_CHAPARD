@@ -115,9 +115,35 @@ static void app(void)
                   strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
                   send_message_to_all_clients(clients, client, actual, buffer, 1);
                }
-               else
+               else 
                {
-                  send_message_to_all_clients(clients, client, actual, buffer, 0);
+                  char* bufferCopy = malloc(sizeof(char)*strlen(buffer));
+                  strcpy(bufferCopy,buffer);
+                  Client receiver;
+                  if (strcmp(strtok(bufferCopy, " "),"@")==0)
+                  {
+                     char* receiverName = strtok(NULL, " ");
+                     int receiverFound = 0;
+                     for (int j=0; j<actual; j++)
+                     {
+                        if (strcmp(receiverName, clients[j].name)==0)
+                        {
+                           receiver = clients[j];
+                           receiverFound = 1;
+                           break;
+                        }
+                     }
+                     if (receiverFound){
+                        char* messageToSend = strtok(NULL,"\n");
+                        send_message_to_one_client(receiver, client, messageToSend, 0);
+                     } else {
+                        write_client(client.sock, "Utilisateur introuvable");
+                     }
+                  }
+                  else
+                  {
+                     send_message_to_all_clients(clients, client, actual, buffer, 0);
+                  }
                }
                
                break;
@@ -147,11 +173,37 @@ static void remove_client(Client *clients, int to_remove, int *actual)
    (*actual)--;
 }
 
+static void write_discution_in_file(char* path, char* receiver_name, char* sender_name, char* message)
+{
+   char *concatSend = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
+   memcpy( concatSend, path, strlen(path) );
+   memcpy( concatSend+strlen(path),sender_name, strlen(sender_name) );
+   memcpy( concatSend+strlen(path)+strlen(sender_name), ";" ,1 );
+   memcpy( concatSend+strlen(path)+strlen(sender_name)+1, receiver_name ,strlen(receiver_name) );
+   memcpy( concatSend+strlen(path)+strlen(sender_name)+1+strlen(receiver_name), ".txt" ,4 );
+   concatSend[strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+4] = '\0';
+   char *concatReceive = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
+   memcpy( concatReceive, path, strlen(path) );
+   memcpy( concatReceive+strlen(path),receiver_name, strlen(receiver_name) );
+   memcpy( concatReceive+strlen(path)+strlen(receiver_name), ";" ,1 );
+   memcpy( concatReceive+strlen(path)+strlen(receiver_name)+1, sender_name ,strlen(sender_name) );
+   memcpy( concatReceive+strlen(path)+strlen(receiver_name)+1+strlen(sender_name), ".txt" ,4 );
+   concatReceive[strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+4] = '\0';
+   FILE* fptr;
+   if (access(concatSend, F_OK) == 0) {
+      fptr = fopen(concatSend, "a+");
+   } else {
+      fptr = fopen(concatReceive, "a+");
+   }
+   fprintf(fptr, "%s\n", message);
+   fclose(fptr);
+}
+
 static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server)
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* pathOfMsg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
+   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
    //char copy_msg[BUF_SIZE];
    message[0] = 0;
    for(i = 0; i < actual; i++)
@@ -166,39 +218,18 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
          }
          strncat(message, buffer, sizeof message - strlen(message) - 1);
          write_client(clients[i].sock, message);
-         char *concatSend = (char*)malloc(strlen(pathOfMsg)+strlen(sender.name)+1+strlen(clients[i].name)+5);
-         memcpy( concatSend, pathOfMsg, strlen(pathOfMsg) );
-         memcpy( concatSend+strlen(pathOfMsg),sender.name, strlen(sender.name) );
-         memcpy( concatSend+strlen(pathOfMsg)+strlen(sender.name), ";" ,1 );
-         memcpy( concatSend+strlen(pathOfMsg)+strlen(sender.name)+1, clients[i].name ,strlen(clients[i].name) );
-         memcpy( concatSend+strlen(pathOfMsg)+strlen(sender.name)+1+strlen(clients[i].name), ".txt" ,4 );
-         concatSend[strlen(pathOfMsg)+strlen(sender.name)+1+strlen(clients[i].name)+4] = '\0';
-         char *concatReceive = (char*)malloc(strlen(pathOfMsg)+strlen(sender.name)+1+strlen(clients[i].name)+5);
-         memcpy( concatReceive, pathOfMsg, strlen(pathOfMsg) );
-         memcpy( concatReceive+strlen(pathOfMsg),clients[i].name, strlen(clients[i].name) );
-         memcpy( concatReceive+strlen(pathOfMsg)+strlen(clients[i].name), ";" ,1 );
-         memcpy( concatReceive+strlen(pathOfMsg)+strlen(clients[i].name)+1, sender.name ,strlen(sender.name) );
-         memcpy( concatReceive+strlen(pathOfMsg)+strlen(clients[i].name)+1+strlen(sender.name), ".txt" ,4 );
-         concatReceive[strlen(pathOfMsg)+strlen(sender.name)+1+strlen(clients[i].name)+4] = '\0';
-         FILE* fptr;
-         if (access(concatSend, F_OK) == 0) {
-            fptr = fopen(concatSend, "a+");
-         } else {
-            fptr = fopen(concatReceive, "a+");
-         }
-         fprintf(fptr, "%s\n", message);
-         fclose(fptr);
+         write_discution_in_file(path_of_msg, clients[i].name, sender.name, message);
       }
    }
 }
 
-static void send_message_to_one_client(Client *client, Client sender, int actual, const char *buffer, char from_server)
+static void send_message_to_one_client(Client receiver, Client sender, const char *buffer, char from_server)
 {
    int i = 0;
    char message[BUF_SIZE];
    message[0] = 0;
    /* we don't send message to the sender */
-   if(sender.sock != client->sock)
+   if(sender.sock != receiver.sock)
    {
       if(from_server == 0)
       {
@@ -206,7 +237,7 @@ static void send_message_to_one_client(Client *client, Client sender, int actual
          strncat(message, " : ", sizeof message - strlen(message) - 1);
       }
       strncat(message, buffer, sizeof message - strlen(message) - 1);
-      write_client(client->sock, message);
+      write_client(receiver.sock, message);
    }
 }
 
