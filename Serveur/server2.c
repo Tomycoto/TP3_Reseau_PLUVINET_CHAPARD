@@ -113,14 +113,19 @@ static void app(void)
                   remove_client(clients, i, &actual);
                   strncpy(buffer, client.name, BUF_SIZE - 1);
                   strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
-                  send_message_to_all_clients(clients, client, actual, buffer, 1);
+                  printf("%s\r\n", buffer);
+                  //send_message_to_all_clients(clients, client, actual, buffer, 1);
                }
                else 
                {
                   char* bufferCopy = malloc(sizeof(char)*strlen(buffer));
-                  Client receiver;
+                  Client receiver ;
+                  Client correspondant; 
                   char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
+                  //printf("check_if_at: %s\r\n", check_if_at);
                   char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "#");
+                  //printf("check_if_hashtag: %s\r\n", check_if_hashtag);
+
                   if (strlen(check_if_at)==strlen(buffer)-1)
                   {
                      char* receiverName = strtok(check_if_at, " ");
@@ -131,18 +136,24 @@ static void app(void)
                         {
                            receiver = clients[j];
                            receiverFound = 1;
+                           *client.correspondant=malloc(sizeof(char)*strlen(receiverName));
+                           strcpy(client.correspondant, receiverName);
                            break;
                         }
                      }
                      if (receiverFound){
                         char* message_to_send = strtok(NULL,"\n");
                         send_message_to_one_client(receiver, client, message_to_send, 0);
+                        printf("From %s to %s: %s\r\n", client.name, receiver.name, message_to_send);
                      } else {
-                        write_client(client.sock, "Utilisateur introuvable");
+                        write_client(client.sock, "Utilisateur hors-ligne");
+                        printf("From %s: destinataire hors-ligne\r\n", client.name);
+                        //ECRIRE LE MSG DANS LE FICHIER TXT
                      }
                   }
                   else if (strlen(check_if_hashtag)==strlen(buffer)-1)
                   {
+                     printf("hashtag found");
                      Client group_members[MAX_CLIENTS];
                      char* group = strtok(check_if_hashtag,"#");
                      char* current_person=strcat(group, "#");
@@ -176,7 +187,48 @@ static void app(void)
                   }
                   else
                   {
-                     send_message_to_all_clients(clients, client, actual, buffer, 0);
+                     int iscorrespondant = 0;
+                     Client emitter;
+                     for (int j=0; j<actual; j++)
+                        {
+                           if (strcmp(client.name, clients[j].correspondant)==0)
+                           {
+                              emitter = clients[j];
+                              iscorrespondant = 1;
+                              break;
+                           }
+                           
+                        }
+                     if(iscorrespondant){
+                        send_message_to_one_client(emitter, client, buffer, 0);
+                     }
+                     else if(strlen(client.correspondant)>0){
+                        int correspondantfound = 0;
+                        for (int j=0; j<actual; j++)
+                        {
+                           if (strcmp(client.correspondant, clients[j].name)==0)
+                           {
+                              correspondant = clients[j];
+                              correspondantfound = 1;
+                              break;
+                           }
+                        }
+                        if (correspondantfound){
+                           send_message_to_one_client(correspondant, client, buffer, 0);
+                           printf("From %s to %s: %s\r\n", client.name, correspondant.name, buffer);
+                        } else {
+                           write_client(client.sock, "Utilisateur hors-ligne");
+                           printf("From %s: destinataire hors-ligne\r\n", client.name);
+                           //ECRIRE LE MSG DANS LE FICHIER TXT
+
+                        }
+                        send_message_to_one_client(receiver, client, buffer, 0);              
+                     }
+                     else{
+                        write_client(client.sock, "Veuillez spécifier un destinataire");
+                     }
+                     
+                     //send_message_to_all_clients(clients, client, actual, buffer, 0);
                   }
                }
                break;
@@ -236,7 +288,7 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
+   char* path_of_msg="/home/bpluvinet/Documents";
    //char copy_msg[BUF_SIZE];
    message[0] = 0;
    for(i = 0; i < actual; i++)
@@ -260,6 +312,7 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
 {
    int i = 0;
    char message[BUF_SIZE];
+   char* path_of_msg="/home/bpluvinet/Documents";
    message[0] = 0;
    /* we don't send message to the sender */
    if(sender.sock != receiver.sock)
@@ -271,6 +324,8 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
       }
       strncat(message, buffer, sizeof message - strlen(message) - 1);
       write_client(receiver.sock, message);
+      write_discution_in_file(path_of_msg, receiver.name, sender.name, message);
+
    }
 }
 
