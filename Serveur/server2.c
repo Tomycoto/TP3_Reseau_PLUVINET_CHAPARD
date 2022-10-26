@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-
+#include <time.h>
 #include "server2.h"
 #include "client2.h"
 
@@ -107,25 +107,34 @@ static void app(void)
                Client client = clients[i];
                int c = read_client(clients[i].sock, buffer);
                /* client disconnected */
-               if(c == 0)
+               if(c == 0 || buffer=="q")
                {
                   closesocket(clients[i].sock);
                   remove_client(clients, i, &actual);
                   strncpy(buffer, client.name, BUF_SIZE - 1);
                   strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
-                  printf("%s\r\n", buffer);
-                  //send_message_to_all_clients(clients, client, actual, buffer, 1);
+                  send_message_to_all_clients(clients, client, actual, buffer, 1);
                }
                else 
                {
-                  char* bufferCopy = malloc(sizeof(char)*strlen(buffer));
-                  Client receiver ;
-                  Client correspondant; 
+                  char bufferCopy[strlen(buffer)];
+                  Client receiver;
                   char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
-                  //printf("check_if_at: %s\r\n", check_if_at);
                   char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "#");
-                  //printf("check_if_hashtag: %s\r\n", check_if_hashtag);
-
+                  /*char* check_if_at = strtok(strcpy(bufferCopy,buffer), "#");
+                  char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "@");
+                  char* next_at = strtok(NULL, "@");
+                  if (next_at!=NULL) //sinon on a un seul destinataire
+                  {
+                     printf("check : %s\n", check_if_hashtag);
+                     memcpy( check_if_hashtag+strlen(check_if_hashtag), "@", 1);
+                     memcpy( check_if_hashtag+strlen(check_if_hashtag)+1,next_at, strlen(next_at) );
+                     check_if_hashtag[strlen(check_if_hashtag)+1+strlen(next_at)] = '\0';
+   
+                     //strncat(check_if_hashtag, "@", strlen(check_if_hashtag)+strlen(next_at)+1);
+                     //strncat(check_if_hashtag, next_at, strlen(check_if_hashtag)+strlen(next_at)+1);
+                  }
+                  printf("%s --- %s\n", check_if_hashtag, next_at);*/
                   if (strlen(check_if_at)==strlen(buffer)-1)
                   {
                      char* receiverName = strtok(check_if_at, " ");
@@ -136,29 +145,27 @@ static void app(void)
                         {
                            receiver = clients[j];
                            receiverFound = 1;
-                           *client.correspondant=malloc(sizeof(char)*strlen(receiverName));
-                           strcpy(client.correspondant, receiverName);
                            break;
                         }
                      }
                      if (receiverFound){
                         char* message_to_send = strtok(NULL,"\n");
                         send_message_to_one_client(receiver, client, message_to_send, 0);
-                        printf("From %s to %s: %s\r\n", client.name, receiver.name, message_to_send);
                      } else {
-                        write_client(client.sock, "Utilisateur hors-ligne");
-                        printf("From %s: destinataire hors-ligne\r\n", client.name);
-                        //ECRIRE LE MSG DANS LE FICHIER TXT
+                        write_client(client.sock, "Utilisateur introuvable");
                      }
                   }
                   else if (strlen(check_if_hashtag)==strlen(buffer)-1)
                   {
-                     printf("hashtag found");
                      Client group_members[MAX_CLIENTS];
-                     char* group = strtok(check_if_hashtag,"#");
-                     char* current_person=strcat(group, "#");
+                     char* group_name;
+                     char* current_person=strtok(check_if_hashtag, "+");
+                     //char* current_person=strtok(check_if_hashtag, "@");
+                     char* previous_person="";
                      int k=0;
-                     while(strcmp(current_person, "#")!=0)
+                     int ch = ' ';
+      
+                     while(strchr(current_person,ch)==NULL)
                      {
                         int receiverFound = 0;
                         for (int j=0; j<actual; j++)
@@ -172,63 +179,36 @@ static void app(void)
                         }
                         if (!receiverFound)
                         {
-                           write_client(client.sock, "Utilisateur introuvable");
+                           write_client(client.sock, "Un utilisateur est introuvable");
                         }
-                        current_person = strtok(NULL, " ");
+                        previous_person= current_person;
+                        current_person = strtok(NULL, "+");
+                        //current_person = strtok(NULL, "@");
                         k++;
                      }
-                     Client* group_members_reduced = malloc(k*sizeof(Client));
-                     for (int m=0;m<k;m++)
+
+                     current_person = strtok(current_person, " ");
+                     int receiverFound = 0;
+                     for (int j=0; j<actual; j++)
                      {
-                        group_members_reduced[m]=group_members[m];
+                        if (strcmp(current_person, clients[j].name)==0)
+                        {
+                           group_members[k] = clients[j];
+                           receiverFound = 1;
+                           break;
+                        }
                      }
+                     if (!receiverFound)
+                     {
+                        write_client(client.sock, "Utilisateur introuvable");
+                     }
+                     k++;
                      char * message_to_send = strtok(NULL, "\n");
-                     send_message_to_all_clients(group_members_reduced, client, actual, message_to_send, 0);
+                     send_message_to_all_clients(group_members, client, k, message_to_send, 0);
                   }
                   else
                   {
-                     int iscorrespondant = 0;
-                     Client emitter;
-                     for (int j=0; j<actual; j++)
-                        {
-                           if (strcmp(client.name, clients[j].correspondant)==0)
-                           {
-                              emitter = clients[j];
-                              iscorrespondant = 1;
-                              break;
-                           }
-                           
-                        }
-                     if(iscorrespondant){
-                        send_message_to_one_client(emitter, client, buffer, 0);
-                     }
-                     else if(strlen(client.correspondant)>0){
-                        int correspondantfound = 0;
-                        for (int j=0; j<actual; j++)
-                        {
-                           if (strcmp(client.correspondant, clients[j].name)==0)
-                           {
-                              correspondant = clients[j];
-                              correspondantfound = 1;
-                              break;
-                           }
-                        }
-                        if (correspondantfound){
-                           send_message_to_one_client(correspondant, client, buffer, 0);
-                           printf("From %s to %s: %s\r\n", client.name, correspondant.name, buffer);
-                        } else {
-                           write_client(client.sock, "Utilisateur hors-ligne");
-                           printf("From %s: destinataire hors-ligne\r\n", client.name);
-                           //ECRIRE LE MSG DANS LE FICHIER TXT
-
-                        }
-                        send_message_to_one_client(receiver, client, buffer, 0);              
-                     }
-                     else{
-                        write_client(client.sock, "Veuillez spécifier un destinataire");
-                     }
-                     
-                     //send_message_to_all_clients(clients, client, actual, buffer, 0);
+                     send_message_to_all_clients(clients, client, actual, buffer, 0);
                   }
                }
                break;
@@ -258,8 +238,11 @@ static void remove_client(Client *clients, int to_remove, int *actual)
    (*actual)--;
 }
 
-static void write_discution_in_file(char* path, char* receiver_name, char* sender_name, char* message)
+static void write_discution_in_file_private(char* path, char* receiver_name, char* sender_name, char* message)
 {
+   time_t t = time(NULL);
+   struct tm tm = *localtime(&t);
+
    char *concatSend = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
    memcpy( concatSend, path, strlen(path) );
    memcpy( concatSend+strlen(path),sender_name, strlen(sender_name) );
@@ -280,7 +263,36 @@ static void write_discution_in_file(char* path, char* receiver_name, char* sende
    } else {
       fptr = fopen(concatReceive, "a+");
    }
-   fprintf(fptr, "%s\n", message);
+   fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender_name, message);
+   fclose(fptr);
+}
+
+static void write_discution_in_file_group(char* path, char** receiver_names, char* sender_name, char* message)
+{
+   time_t t = time(NULL);
+   struct tm tm = *localtime(&t);
+
+   char *concatSend = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
+   memcpy( concatSend, path, strlen(path) );
+   memcpy( concatSend+strlen(path),sender_name, strlen(sender_name) );
+   memcpy( concatSend+strlen(path)+strlen(sender_name), ";" ,1 );
+   memcpy( concatSend+strlen(path)+strlen(sender_name)+1, receiver_name ,strlen(receiver_name) );
+   memcpy( concatSend+strlen(path)+strlen(sender_name)+1+strlen(receiver_name), ".txt" ,4 );
+   concatSend[strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+4] = '\0';
+   char *concatReceive = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
+   memcpy( concatReceive, path, strlen(path) );
+   memcpy( concatReceive+strlen(path),receiver_name, strlen(receiver_name) );
+   memcpy( concatReceive+strlen(path)+strlen(receiver_name), ";" ,1 );
+   memcpy( concatReceive+strlen(path)+strlen(receiver_name)+1, sender_name ,strlen(sender_name) );
+   memcpy( concatReceive+strlen(path)+strlen(receiver_name)+1+strlen(sender_name), ".txt" ,4 );
+   concatReceive[strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+4] = '\0';
+   FILE* fptr;
+   if (access(concatSend, F_OK) == 0) {
+      fptr = fopen(concatSend, "a+");
+   } else {
+      fptr = fopen(concatReceive, "a+");
+   }
+   fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender_name, message);
    fclose(fptr);
 }
 
@@ -288,22 +300,47 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* path_of_msg="/home/bpluvinet/Documents";
-   //char copy_msg[BUF_SIZE];
+   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
    message[0] = 0;
+   char heading[BUF_SIZE];
+   strcpy(heading,sender.name);
+   int all=0;
+   strncat(heading," to ",sizeof heading - strlen(heading) - 1);
+   for (int j=0; j<actual-1; j++)
+   {
+      if (strcmp(clients[j].name,sender.name)==0)
+      {
+         strcpy(heading,sender.name);
+         strncat(heading," to all",sizeof heading - strlen(heading) - 1);
+         all=1;
+         break;
+      }
+      strncat(heading,clients[j].name,sizeof heading - strlen(heading) - 1);
+      strncat(heading,", ",sizeof heading - strlen(heading) - 1);
+   }
+   if (strcmp(clients[actual-1].name,sender.name)==0 && !all)
+   {
+      strcpy(heading,sender.name);
+      strncat(heading," to all",sizeof heading - strlen(heading) - 1);
+      all=1;
+   }
+   if (!all)
+   {
+      strncat(heading,clients[actual-1].name,sizeof heading - strlen(heading) - 1);
+   }
+   if(from_server == 0)
+      {
+         strncat(heading, " : ", sizeof heading - strlen(heading) - 1);
+      }
+      strncat(message, buffer, sizeof message - strlen(message) - 1);
    for(i = 0; i < actual; i++)
    {
       /* we don't send message to the sender */
       if(sender.sock != clients[i].sock)
       {
-         if(from_server == 0)
-         {
-            strncpy(message, sender.name, BUF_SIZE - 1);
-            strncat(message, " : ", sizeof message - strlen(message) - 1);
-         }
-         strncat(message, buffer, sizeof message - strlen(message) - 1);
+         write_client(clients[i].sock, heading);
          write_client(clients[i].sock, message);
-         write_discution_in_file(path_of_msg, clients[i].name, sender.name, message);
+         write_discution_in_file_private(path_of_msg, clients[i].name, sender.name, message);
       }
    }
 }
@@ -312,20 +349,24 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* path_of_msg="/home/bpluvinet/Documents";
+   char heading[BUF_SIZE];
+   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
    message[0] = 0;
+   heading[0] = 0;
    /* we don't send message to the sender */
    if(sender.sock != receiver.sock)
    {
       if(from_server == 0)
       {
-         strncpy(message, sender.name, BUF_SIZE - 1);
-         strncat(message, " : ", sizeof message - strlen(message) - 1);
+         strncpy(heading, sender.name, BUF_SIZE - 1);
+         strncat(heading, " to ", sizeof heading - strlen(heading) - 1);
+         strncat(heading, receiver.name, sizeof heading - strlen(heading) - 1);
+         strncat(heading, " : ", sizeof heading - strlen(heading) - 1);
       }
       strncat(message, buffer, sizeof message - strlen(message) - 1);
+      write_client(receiver.sock, heading);
       write_client(receiver.sock, message);
-      write_discution_in_file(path_of_msg, receiver.name, sender.name, message);
-
+      write_discution_in_file_private(path_of_msg, receiver.name, sender.name, message);
    }
 }
 
