@@ -242,68 +242,106 @@ static void write_discution_in_file_private(char* path, char* receiver_name, cha
 {
    time_t t = time(NULL);
    struct tm tm = *localtime(&t);
-
-   char *concatSend = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
-   memcpy( concatSend, path, strlen(path) );
-   memcpy( concatSend+strlen(path),sender_name, strlen(sender_name) );
-   memcpy( concatSend+strlen(path)+strlen(sender_name), ";" ,1 );
-   memcpy( concatSend+strlen(path)+strlen(sender_name)+1, receiver_name ,strlen(receiver_name) );
-   memcpy( concatSend+strlen(path)+strlen(sender_name)+1+strlen(receiver_name), ".txt" ,4 );
-   concatSend[strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+4] = '\0';
-   char *concatReceive = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+5);
-   memcpy( concatReceive, path, strlen(path) );
-   memcpy( concatReceive+strlen(path),receiver_name, strlen(receiver_name) );
-   memcpy( concatReceive+strlen(path)+strlen(receiver_name), ";" ,1 );
-   memcpy( concatReceive+strlen(path)+strlen(receiver_name)+1, sender_name ,strlen(sender_name) );
-   memcpy( concatReceive+strlen(path)+strlen(receiver_name)+1+strlen(sender_name), ".txt" ,4 );
-   concatReceive[strlen(path)+strlen(sender_name)+1+strlen(receiver_name)+4] = '\0';
-   FILE* fptr;
-   if (access(concatSend, F_OK) == 0) {
-      fptr = fopen(concatSend, "a+");
-   } else {
-      fptr = fopen(concatReceive, "a+");
+   char* first_name;
+   char* second_name;
+   if (strcmp(receiver_name, sender_name)<0)
+   {
+      first_name = receiver_name;
+      second_name = sender_name;
+   } else
+   {
+      first_name = sender_name;
+      second_name = receiver_name;
    }
+   char *concatSend = (char*)malloc(strlen(path)+strlen(first_name)+1+strlen(second_name)+5);
+   memcpy( concatSend, path, strlen(path) );
+   memcpy( concatSend+strlen(path),first_name, strlen(first_name) );
+   memcpy( concatSend+strlen(path)+strlen(first_name), ";" ,1 );
+   memcpy( concatSend+strlen(path)+strlen(first_name)+1, second_name ,strlen(second_name) );
+   memcpy( concatSend+strlen(path)+strlen(first_name)+1+strlen(second_name), ".txt" ,4 );
+   concatSend[strlen(path)+strlen(first_name)+1+strlen(second_name)+4] = '\0';
+   
+   FILE* fptr= fopen(concatSend, "a+");
    fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender_name, message);
    fclose(fptr);
 }
 
-static void write_discution_in_file_group(char* path, Client* receivers_names, char* sender_name, char* message)
+static void write_discution_in_file_group(char* path, Client* receivers_names, int number_of_receivers, Client sender, char* message)
 {
    time_t t = time(NULL);
    struct tm tm = *localtime(&t);
-   
    char receivers_concatenate[BUF_SIZE];
    strcpy(receivers_concatenate, ""); //réinitialisation de receivers_concatenate à chaque message pour éviter l'accumulation de pseudos
-   Client* receivers_iterator = receivers_names;
-   while(strcmp(receivers_iterator->name, "")!=0)
+
+   int sender_already_here=0;
+   for (int i=0; i<number_of_receivers;i++) //recherche si on a déjà l'envoyeur dans les destinataires
    {
-      if (strcmp(receivers_iterator->name, sender_name)!=0)
+      if (strcmp(sender.name, receivers_names[i].name)==0)
       {
-         strncat(receivers_concatenate, receivers_iterator->name, BUF_SIZE);
-         strncat(receivers_concatenate, ";", BUF_SIZE);
+         sender_already_here=1;
+         break;
       }
-      receivers_iterator++;
+   }
+   if(sender_already_here)
+   {
+      for (int i=0; i<number_of_receivers;i++)
+      {
+         for (int j=0;j<number_of_receivers;j++)
+         {
+            if (i!=j && strcmp(receivers_names[i].name, receivers_names[j].name)<0)
+            {
+               Client temp = receivers_names[i];
+               receivers_names[i] = receivers_names[j];
+               receivers_names[j] = temp;
+            }
+         }
+      }
+      for (int i=0; i<number_of_receivers-1;i++)
+      {
+         strncat(receivers_concatenate, receivers_names[i].name, BUF_SIZE);
+         strncat(receivers_concatenate, ";", strlen(receivers_concatenate)+1);
+      }
+      strncat(receivers_concatenate, receivers_names[number_of_receivers-1].name, BUF_SIZE);  
+   }
+   else
+   {
+      Client receivers_and_sender[number_of_receivers+1];
+   
+      for (int i=0; i<number_of_receivers;i++)
+      {
+         receivers_and_sender[i] = receivers_names[i];
+      }
+      receivers_and_sender[number_of_receivers] = sender;
+      
+      for (int i=0; i<number_of_receivers+1;i++)
+      {
+         for (int j=0;j<number_of_receivers+1;j++)
+         {
+            if (i!=j && strcmp(receivers_and_sender[i].name, receivers_and_sender[j].name)<0)
+            {
+               Client temp2 = receivers_and_sender[i];
+               receivers_and_sender[i] = receivers_and_sender[j];
+               receivers_and_sender[j] = temp2;
+            }
+         }
+      }
+
+      for (int i=0; i<number_of_receivers;i++)
+      {
+         strncat(receivers_concatenate, receivers_and_sender[i].name, BUF_SIZE);
+         strncat(receivers_concatenate, ";", strlen(receivers_concatenate)+1);
+      }
+      strncat(receivers_concatenate, receivers_and_sender[number_of_receivers].name, BUF_SIZE); 
    }
 
-   char *concatSend = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receivers_concatenate)+5);
+   char *concatSend = (char*)malloc(strlen(path)+strlen(receivers_concatenate)+5);
    memcpy( concatSend, path, strlen(path) );
-   memcpy( concatSend+strlen(path),sender_name, strlen(sender_name) );
-   memcpy( concatSend+strlen(path)+strlen(sender_name), receivers_concatenate ,strlen(receivers_concatenate) );
-   memcpy( concatSend+strlen(path)+strlen(sender_name)+strlen(receivers_concatenate), ".txt" ,4 );
-   concatSend[strlen(path)+strlen(sender_name)+strlen(receivers_concatenate)+4] = '\0';
-   char *concatReceive = (char*)malloc(strlen(path)+strlen(sender_name)+1+strlen(receivers_concatenate)+5);
-   memcpy( concatReceive, path, strlen(path) );
-   memcpy( concatReceive+strlen(path),receivers_concatenate, strlen(receivers_concatenate) );
-   memcpy( concatReceive+strlen(path)+strlen(receivers_concatenate), sender_name ,strlen(sender_name) );
-   memcpy( concatReceive+strlen(path)+strlen(receivers_concatenate)+strlen(sender_name), ".txt" ,4 );
-   concatReceive[strlen(path)+strlen(sender_name)+strlen(receivers_concatenate)+4] = '\0';
+   memcpy( concatSend+strlen(path), receivers_concatenate ,strlen(receivers_concatenate) );
+   memcpy( concatSend+strlen(path)+strlen(receivers_concatenate), ".txt" ,4 );
+   concatSend[strlen(path)+strlen(receivers_concatenate)+4] = '\0';
    FILE* fptr;
-   if (access(concatSend, F_OK) == 0) {
-      fptr = fopen(concatSend, "a+");
-   } else {
-      fptr = fopen(concatReceive, "a+");
-   }
-   fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender_name, message);
+   fptr = fopen(concatSend, "a+");
+   fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender.name, message);
    fclose(fptr);
 }
 
@@ -311,7 +349,7 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
+   char* path_of_msg="./Messages/";
    message[0] = 0;
    char heading[BUF_SIZE];
    strcpy(heading,sender.name);
@@ -353,7 +391,7 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
          write_client(clients[i].sock, message);
       }
    }
-   write_discution_in_file_group(path_of_msg, clients, sender.name, message);
+   write_discution_in_file_group(path_of_msg, clients, actual, sender, message);
 }
 
 static void send_message_to_one_client(Client receiver, Client sender, const char *buffer, char from_server)
@@ -361,7 +399,7 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
    int i = 0;
    char message[BUF_SIZE];
    char heading[BUF_SIZE];
-   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
+   char* path_of_msg="./Messages/";
    message[0] = 0;
    heading[0] = 0;
    /* we don't send message to the sender */
