@@ -1,0 +1,2 @@
+#members A,C,B,
+2022-10-29 20:20:59 - B : Welcome to the group guys !
