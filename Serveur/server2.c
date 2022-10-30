@@ -141,7 +141,10 @@ static void app(void)
                         char* message_to_send = strtok(NULL,"\n");
                         send_message_to_one_client(receiver, client, message_to_send, 0);
                      } else {
-                        write_client(client.sock, "Utilisateur introuvable");
+                        char error_message [BUF_SIZE];
+                        strcpy(error_message, receiver.name);
+                        strcat(error_message, " cannot be found\n Message not sent");
+                        write_client(client.sock, error_message);
                      }
                   }
                   else if (strcmp(check_command, "#C")==0)
@@ -151,6 +154,10 @@ static void app(void)
                   else if (strcmp(check_command, "#L")==0)
                   {  
                      print_clients_list(clients, client, actual);
+                  }
+                  else if (strcmp(check_command, "#G")==0)
+                  {  
+                     print_groups_list(client);
                   }
                   else if (strcmp(check_command, "#O")==0)
                   {
@@ -189,6 +196,7 @@ static int connect_client(Client* client, char* buffer) //Client pointer to modi
          {
             write_client(client->sock, "Connection OK");
             fclose(users_file_ptr);
+            print_options_list(*client);
             return 1;
          }
          else
@@ -203,6 +211,7 @@ static int connect_client(Client* client, char* buffer) //Client pointer to modi
    fprintf(users_file_ptr, "%s/%s\n", client->name, client->password);
    write_client(client->sock, "Inscription OK");
    fclose(users_file_ptr);
+   print_options_list(*client);
    return 1;
 }
 
@@ -225,7 +234,7 @@ static void remove_client(Client *clients, int to_remove, int *actual)
 
 static void print_clients_list(Client* connected_clients, Client caller, int nb_connected_clients)
 {
-   write_client(caller.sock, "Liste des clients connectés :\n");
+   write_client(caller.sock, "List of connected clients :\n");
    for (int i=0; i<nb_connected_clients-1; i++)
    {
       write_client(caller.sock, connected_clients[i].name);
@@ -234,16 +243,41 @@ static void print_clients_list(Client* connected_clients, Client caller, int nb_
    write_client(caller.sock, connected_clients[nb_connected_clients-1].name);
 }
 
+static void print_groups_list(Client caller)
+{
+   char groups_list[BUF_SIZE];
+   FILE* groups_file_ptr = fopen("../Infos/groups_informations.txt", "a+");
+   char groups_file_buffer[BUF_SIZE];
+   char caller_name_comma[BUF_SIZE]; //To avoid matching a part of the group name
+   strcpy(caller_name_comma, caller.name);
+   strcat(caller_name_comma, ",");
+   while (!feof(groups_file_ptr))
+   {
+      fgets(groups_file_buffer, BUF_SIZE, groups_file_ptr);
+      if (strstr(groups_file_buffer, caller_name_comma)!=NULL)
+      {
+         strcat(groups_list,strtok(groups_file_buffer, "="));
+         strcat(groups_list, " / ");
+      }
+   }
+   groups_list[strlen(groups_list)-3] = '\0';
+   write_client(caller.sock, "List of groups you are a member of :");
+   write_client(caller.sock, groups_list);
+   write_client(caller.sock, "\n");
+}
+
 static void print_options_list(Client caller)
 {  write_client(caller.sock, "\nAvailable options:\n");
-   char* simple_message = ("'message' : Send a message to the current discussion\n");
+   char* simple_message = ("'message' : Send a message to the current discussion thread (all by default)\n");
    char* new_message = ("'@member|groupname message' : Send a message to another person|group\n");
    char* group_creation = ("'#C groupname member1,member2,memberX message' : Create a new discussion group\n");
+   char* group_list = ("'#G' : See the list of groups you are a member of\n");
    char* clients_list = ("'#L' : See the list of connected clients\n");
    char* options_list = ("'#O' : See the list of options\n");
    write_client(caller.sock, simple_message);
    write_client(caller.sock, new_message);
    write_client(caller.sock, group_creation);
+   write_client(caller.sock, group_list);
    write_client(caller.sock, clients_list);
    write_client(caller.sock, options_list);
 }
@@ -307,7 +341,7 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
    group_members[k] = sender; //Ajout du client créateur du groupe à ce groupe (il est intégré au groupe qu'il crée)
    k++;
 
-   Group group_to_send = {k, group_members, group_name}; 
+   Group group_to_send = {k, group_members, group_name};
    FILE* group_inscription_ptr = fopen("../Infos/groups_informations.txt", "a+");
    fprintf(group_inscription_ptr, "%s=%d:", group_name, k);
    for (int i=0;i<k;i++)
@@ -317,8 +351,9 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
    fprintf(group_inscription_ptr, "\n");
    fclose(group_inscription_ptr);
    write_client(sender.sock, "Group created successfully");
-   char * message_to_send = strtok(NULL, "\n");
-   send_message_to_a_group(group_to_send, sender, message_to_send);
+   char message_to_send[BUF_SIZE];
+   strcpy(message_to_send, strtok(NULL, "\n"));
+   send_message_to_a_group(group_to_send, sender, message_to_send, 1);
 
 }
 
@@ -503,13 +538,30 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
    write_discution_in_file_several(path_of_msg, clients, actual, sender, message);
 }
 
-static void send_message_to_a_group(Group group, Client sender, const char* buffer)
+static void send_message_to_a_group(Group group, Client sender, const char* buffer, int group_creation)
 {
    int i = 0;
    char message[BUF_SIZE];
    char* path_of_msg="../Groupes/";
-   message[0] = 0;
-   strncat(message, buffer, sizeof message - strlen(message) - 1);
+   if (group_creation)
+   {
+      strcpy(message, "You have been added to a new group '");
+      strcat(message, group.group_name);
+      strcat(message, "' composed of ");
+      for (int i=0;i<group.number_members-1;i++)
+      {
+         strcat(message, group.group_members[i].name);
+         strcat(message, ", ");
+      }
+      strcat(message, group.group_members[group.number_members-1].name);
+      strcat(message, "\n");
+   }
+   strcat(message, sender.name);
+   strcat(message, " to ");
+   strcat(message, group.group_name);
+   strcat(message, " : ");
+   strcat(message, buffer);
+   printf("%s\n", message);
    for (int j=0; j<group.number_members; j++)
    {
       if (strcmp(group.group_members[j].name, sender.name)!=0)
