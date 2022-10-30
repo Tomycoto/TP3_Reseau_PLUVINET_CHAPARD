@@ -35,6 +35,12 @@ typedef struct in_addr IN_ADDR;
 
 #include "client2.h"
 
+typedef struct {
+   char name[BUF_SIZE];
+   int size;
+   Client membreGroupe[MAX_CLIENTS]; 
+}Groupe;
+
 static void init(void);
 static void end(void);
 static void app(void);
@@ -43,6 +49,7 @@ static void end_connection(int sock);
 static int read_client(SOCKET sock, char *buffer);
 static void write_client(SOCKET sock, const char *buffer);
 static void send_message_to_all_clients(Client *clients, Client client, int actual, const char *buffer, char from_server);
+static void send_message_to_one_client(Client receiver, Client sender, const char *buffer, char from_server);
 static void remove_client(Client *clients, int to_remove, int *actual);
 static void clear_clients(Client *clients, int actual);
 

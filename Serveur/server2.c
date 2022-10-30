@@ -32,9 +32,13 @@ static void app(void)
    char buffer[BUF_SIZE];
    /* the index for the array */
    int actual = 0;
+   int nbGrp = 0;
    int max = sock;
    /* an array for all clients */
    Client clients[MAX_CLIENTS];
+   
+   /* an array for all groupes */
+   Groupe groupes[MAX_CLIENTS];
 
    fd_set rdfs;
 
@@ -95,6 +99,24 @@ static void app(void)
          strncpy(c.name, buffer, BUF_SIZE - 1);
          clients[actual] = c;
          actual++;
+         //Liste des groupes c est membre
+         char ismember[MAX_CLIENTS];
+         for (int g = 0; i < nbGrp; i++)
+         {
+            for (int h = 0; i < groupes[g].size; i++)
+            {
+               if (strcmp(c.name,groupes[g].membreGroupe[h].name)==0)
+               {
+                  strcat(ismember, groupes[g].name);
+                  strcat(ismember, "- ");
+               }
+            }
+            
+         }
+         write_client(sock, "Vous appartenez aux groupes suivants");
+         write_client(sock, ismember);
+         write_client(sock, "Pour parler à une personne, entrez: @Destinataire [Message]\r\n Pour créer un groupe, entrez: #NomDuGroupe:Destinataire1+Destinataire2+...+DestinataireN [Message]\r\n Pour envoyer un message à un groupe existant #NomDuGroupe [Message]\r\n");
+      
       }
       else
       {
@@ -114,6 +136,7 @@ static void app(void)
                   strncpy(buffer, client.name, BUF_SIZE - 1);
                   strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
                   send_message_to_all_clients(clients, client, actual, buffer, 1);
+                  printf("%s\r\n", buffer);
                }
                else 
                {
@@ -121,6 +144,7 @@ static void app(void)
                   Client receiver;
                   char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
                   char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "#");
+
                   /*char* check_if_at = strtok(strcpy(bufferCopy,buffer), "#");
                   char* check_if_hashtag = strtok(strcpy(bufferCopy,buffer), "@");
                   char* next_at = strtok(NULL, "@");
@@ -151,65 +175,95 @@ static void app(void)
                      if (receiverFound){
                         char* message_to_send = strtok(NULL,"\n");
                         send_message_to_one_client(receiver, client, message_to_send, 0);
+                        printf("From %s to %s: %s\r\n", client.name, receiver.name, message_to_send);
                      } else {
-                        write_client(client.sock, "Utilisateur introuvable");
+                        write_client(client.sock, "Utilisateur hors-ligne");
+                        printf("From %s: destinataire hors-ligne\r\n", client.name);
                      }
                   }
                   else if (strlen(check_if_hashtag)==strlen(buffer)-1)
                   {
-                     Client group_members[MAX_CLIENTS];
-                     char* group_name;
-                     char* current_person=strtok(check_if_hashtag, "+");
-                     //char* current_person=strtok(check_if_hashtag, "@");
-                     char* previous_person="";
-                     int k=0;
-                     int ch = ' ';
-      
-                     while(strchr(current_person,ch)==NULL)
+                     Groupe groupe;
+
+                     //Verifie si le groupe existe déjà 
+                     strcpy(groupe.name, strtok(check_if_hashtag, ":"));
+                     int existingGroup=0;
+
+                     for (int g = 0; i < nbGrp; i++)
                      {
+                        if (strcmp(groupe.name, groupes[g].name)==0)
+                        {
+                          strcpy(groupe.membreGroupe, groupes[g].membreGroupe);
+                          existingGroup = 1;
+                          break;
+                        }  
+                     }
+                     if(existingGroup){
+                        char * message_to_send = strtok(NULL, "\n");
+                        send_message_to_all_clients(groupe.membreGroupe,client,groupe.size,message_to_send,0);
+                     }
+                     
+                     //sinon crée le groupe
+                     else{
+                        nbGrp++;
+                        groupe.size=0;
+                        char* current_person= strtok(NULL, "+");
+                        char* previous_person="";
+                        int ch = ' ';
+
+                        while(strchr(current_person,ch)==NULL)
+                        {
+                           int receiverFound = 0;
+                           for (int j=0; j<actual; j++)
+                           {
+                              if (strcmp(current_person, clients[j].name)==0)
+                              {
+                                 groupe.membreGroupe[groupe.size] = clients[j];
+                                 receiverFound = 1;
+                                 break;
+                              }
+                           }
+                           if (!receiverFound)
+                           {
+                              write_client(client.sock, "L'utilisateur est hors-ligne");
+                              printf("L'utilisateur %s est hors-ligne.\r\n", current_person);
+                           }
+                           previous_person= current_person;
+                           current_person = strtok(NULL, "+");
+                           groupe.size++;
+                        }
+                        current_person = strtok(current_person, " ");
                         int receiverFound = 0;
                         for (int j=0; j<actual; j++)
                         {
                            if (strcmp(current_person, clients[j].name)==0)
                            {
-                              group_members[k] = clients[j];
+                              groupe.membreGroupe[groupe.size] = clients[j];
                               receiverFound = 1;
                               break;
                            }
                         }
                         if (!receiverFound)
                         {
-                           write_client(client.sock, "Un utilisateur est introuvable");
+                           write_client(client.sock, "Utilisateur introuvable");
+                           printf("L'utilisateur %s est introuvable.\r\n", current_person);
                         }
-                        previous_person= current_person;
-                        current_person = strtok(NULL, "+");
-                        //current_person = strtok(NULL, "@");
-                        k++;
-                     }
 
-                     current_person = strtok(current_person, " ");
-                     int receiverFound = 0;
-                     for (int j=0; j<actual; j++)
-                     {
-                        if (strcmp(current_person, clients[j].name)==0)
-                        {
-                           group_members[k] = clients[j];
-                           receiverFound = 1;
-                           break;
-                        }
+                        groupe.size++;
+
+                        groupe.membreGroupe[groupe.size]=client;
+                        groupe.size++
+
+                        char * message_to_send = strtok(NULL, "\n");
+                        send_message_to_all_clients(groupe.membreGroupe, client, groupe.size, message_to_send, 0);                       
+                        printf("From %s to the Group %s: %s\r\n", client.name, groupe.name, message_to_send);
                      }
-                     if (!receiverFound)
-                     {
-                        write_client(client.sock, "Utilisateur introuvable");
-                     }
-                     k++;
-                     char * message_to_send = strtok(NULL, "\n");
-                     send_message_to_all_clients(group_members, client, k, message_to_send, 0);
-                  }
+                  }   
                   else
                   {
-                     send_message_to_all_clients(clients, client, actual, buffer, 0);
-                  }
+                     write_client(client.sock, "Veuillez spécifier un destinataire");
+                     //send_message_to_all_clients(clients, client, actual, buffer, 0);
+                  } 
                }
                break;
             }
@@ -311,7 +365,7 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
+   char* path_of_msg="/home/bpluvinet/Documents";
    message[0] = 0;
    char heading[BUF_SIZE];
    strcpy(heading,sender.name);
@@ -361,7 +415,7 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
    int i = 0;
    char message[BUF_SIZE];
    char heading[BUF_SIZE];
-   char* path_of_msg="/home/tchapard/Bureau/Home_INSA/TP3 Reseau/Serveur/Messages/";
+   char* path_of_msg="/home/bpluvinet/Documents";
    message[0] = 0;
    heading[0] = 0;
    /* we don't send message to the sender */
