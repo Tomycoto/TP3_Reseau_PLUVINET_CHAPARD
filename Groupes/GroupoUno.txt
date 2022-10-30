@@ -1,0 +1,2 @@
+#members A,B,
+2022-10-30 09:41:51 - B : coucou le groupe !

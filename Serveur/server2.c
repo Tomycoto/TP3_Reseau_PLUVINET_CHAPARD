@@ -41,6 +41,7 @@ static void app(void)
 
    while(1)
    {
+      strcpy(buffer,"\r\n");
       int i = 0;
       FD_ZERO(&rdfs);
 
@@ -86,16 +87,16 @@ static void app(void)
             /* disconnected */
             continue;
          }
-
          /* what is the new maximum fd ? */
          max = csock > max ? csock : max;
 
          FD_SET(csock, &rdfs);
-
          Client c = { csock };
-         strncpy(c.name, buffer, BUF_SIZE - 1);
-         clients[actual] = c;
-         actual++;
+         if (connect_client(&c, buffer))
+         {
+            clients[actual] = c;
+            actual++;
+         }
       }
       else
       {
@@ -108,7 +109,7 @@ static void app(void)
                Client client = clients[i];
                int c = read_client(clients[i].sock, buffer);
                /* client disconnected */
-               if(c == 0 || strcmp(buffer, "#Q")==0)
+               if(c == 0)
                {
                   closesocket(clients[i].sock);
                   remove_client(clients, i, &actual);
@@ -119,8 +120,9 @@ static void app(void)
                else 
                {
                   char bufferCopy[strlen(buffer)];
+                  char bufferCopy2[strlen(buffer)];
                   char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
-                  char* check_command = strtok(strcpy(bufferCopy,buffer), " ");
+                  char* check_command = strtok(strcpy(bufferCopy2,buffer), " ");
                   if (strlen(check_if_at)==strlen(buffer)-1)
                   {
                      Client receiver;
@@ -156,6 +158,7 @@ static void app(void)
                   }
                   else
                   {
+                     printf("Nothing detected\n");
                      send_message_to_all_clients(clients, client, actual, buffer, 0);
                   }
                }
@@ -167,6 +170,40 @@ static void app(void)
 
    clear_clients(clients, actual);
    end_connection(sock);
+}
+
+static int connect_client(Client* client, char* buffer) //Client pointer to modify it
+{
+   char* nickname = strtok(buffer, "/");
+   char* password = strtok(NULL, "\n");
+   strcpy(client->name, nickname);
+   strcpy(client->password, password);
+   FILE* users_file_ptr = fopen("../Infos/users_informations.txt", "a+");
+   char users_file_buffer[BUF_SIZE];
+   while (!feof(users_file_ptr))
+   {
+      fgets(users_file_buffer, BUF_SIZE, users_file_ptr);
+      if (strcmp(strtok(users_file_buffer, "/"), client->name) == 0)
+      {
+         if (strcmp(strtok(NULL,"\n"), client->password)==0)
+         {
+            write_client(client->sock, "Connection OK");
+            fclose(users_file_ptr);
+            return 1;
+         }
+         else
+         {
+            write_client(client->sock, "Incorrect password");
+            closesocket(client->sock);
+            fclose(users_file_ptr);
+            return 0;
+         }
+      }
+   }
+   fprintf(users_file_ptr, "%s/%s\n", client->name, client->password);
+   write_client(client->sock, "Inscription OK");
+   fclose(users_file_ptr);
+   return 1;
 }
 
 static void clear_clients(Client *clients, int actual)
@@ -235,7 +272,11 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
       }
       if (!receiverFound)
       {
-         write_client(sender.sock, "Un utilisateur est introuvable");
+         char error_message [BUF_SIZE];
+         strcpy(error_message, current_person);
+         strcat(error_message, " cannot be found\nGroup creation aborted");
+         write_client(sender.sock, error_message);
+         return;
       }
       current_person= strtok(NULL, ",");
       previous_person = current_person;
@@ -255,7 +296,11 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
    }
    if (!receiverFound)
    {
-      write_client(sender.sock, "Un utilisateur est introuvable");
+      char error_message [BUF_SIZE];
+      strcpy(error_message, current_person);
+      strcat(error_message, " cannot be found\nGroup creation aborted");
+      write_client(sender.sock, error_message);
+      return;
    }
    k++;
 
@@ -263,6 +308,15 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
    k++;
 
    Group group_to_send = {k, group_members, group_name}; 
+   FILE* group_inscription_ptr = fopen("../Infos/groups_informations.txt", "a+");
+   fprintf(group_inscription_ptr, "%s=%d:", group_name, k);
+   for (int i=0;i<k;i++)
+   {
+      fprintf(group_inscription_ptr, "%s,", group_members[i].name);
+   }
+   fprintf(group_inscription_ptr, "\n");
+   fclose(group_inscription_ptr);
+   write_client(sender.sock, "Group created successfully");
    char * message_to_send = strtok(NULL, "\n");
    send_message_to_a_group(group_to_send, sender, message_to_send);
 
@@ -404,7 +458,7 @@ static void send_message_to_all_clients(Client *clients, Client sender, int actu
 {
    int i = 0;
    char message[BUF_SIZE];
-   char* path_of_msg="./Messages/";
+   char* path_of_msg="../Discussions/";
    message[0] = 0;
    char heading[BUF_SIZE];
    strcpy(heading,sender.name);

@@ -54,5 +54,6 @@ static void write_discution_in_file_several(char* path, Client* receivers_names,
 static void write_discution_in_file_group(char* path, Group group, Client sender,char* message);
 static void remove_client(Client *clients, int to_remove, int *actual);
 static void clear_clients(Client *clients, int actual);
+static int connect_client(Client* client, char* buffer);
 
 #endif /* guard */

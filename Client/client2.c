@@ -35,6 +35,9 @@ static void app(const char *address, const char *name)
    /* send our name */
    write_server(sock, name);
 
+   /* send our password */
+   //write_server (sock, password);
+
    while(1)
    {
       FD_ZERO(&rdfs);
@@ -149,9 +152,9 @@ static void write_server(SOCKET sock, const char *buffer)
 
 int main(int argc, char **argv)
 {
-   if(argc < 2)
+   if(argc < 3)
    {
-      printf("Usage : %s [address] [pseudo]\n", argv[0]);
+      printf("Usage : %s [address] [pseudo] [password]\n", argv[0]);
       return EXIT_FAILURE;
    }
 
