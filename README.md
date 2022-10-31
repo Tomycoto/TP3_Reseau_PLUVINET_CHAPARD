@@ -24,9 +24,9 @@ _À la connexion, affichage de l'historique des messages reçus par l'utilisateu
 ## Compilation et exécution du programme
 Le programme comprend 2 types d'acteurs : les clients et le serveur.
 > :warning: **Le server doit être exécuté avant les clients pour que ceux-ci puissent se connecter**  
-###__Client__  
+### __Client__  
 * Compilation: Se placer dans le répertoire Client/ et faire `make client`.
 * Exécution: Rester dans le répertoire Client/ et faire `./client ipServeur login/password`.
-###__Serveur__
+### __Serveur__
 * Compilation: Se placer dans le répertoire Serveur/ et faire `make server`.
 * Exécution: Rester dans le répertoire Serveur/ et faire `./server`.
