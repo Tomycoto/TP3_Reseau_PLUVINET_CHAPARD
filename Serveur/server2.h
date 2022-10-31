@@ -51,11 +51,11 @@ static void write_message_to_disconnected_client(char* sender_name, char* receiv
 static void write_group_message_to_disconnected_client(char* sender_name, char* receiver_name, char* group_name, char* message);
 static void create_group(char* buffer, Client* connected_clients, Client sender, int nb_connected_clients);
 static void send_message_with_at(Client* connected_clients, int nb_connected_clients, Client sender, char* receiver_name, char* message);
-static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server);
-static void send_message_to_one_client(Client receiver, Client sender, const char* buffer, char from_server);
+static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer);
+static void send_message_to_one_client(Client receiver, Client sender, const char* buffer);
 static void send_message_to_a_group(Group group, Client sender, const char* buffer, int group_creation);
-static void write_discution_in_file_private(char* path, char* receiver_name, char* sender_name, char* message);
-static void write_discution_in_file_group(char* path, char* group_name, char* sender_name, char* message);
+static void write_discussion_in_file_private(char* path, char* receiver_name, char* sender_name, char* message);
+static void write_discussion_in_file_group(char* path, char* group_name, char* sender_name, char* message);
 static void remove_client(Client *clients, int to_remove, int *actual);
 static void clear_clients(Client *clients, int actual);
 static int connect_client(Client* client, char* buffer);

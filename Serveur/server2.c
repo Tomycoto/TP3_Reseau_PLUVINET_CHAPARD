@@ -94,9 +94,6 @@ static void app(void)
          Client c = { csock };
          if (connect_client(&c, buffer))
          {
-            strcpy(buffer,"../Historiques/");
-            strcat(buffer,c.name);
-            remove(strcat(buffer,".txt")); //Delete the logout history file
             clients[actual] = c;
             actual++;
          }
@@ -118,7 +115,7 @@ static void app(void)
                   remove_client(clients, i, &actual);
                   strncpy(buffer, client.name, BUF_SIZE - 1);
                   strncat(buffer, " disconnected !", BUF_SIZE - strlen(buffer) - 1);
-                  send_message_to_all_clients(clients, client, actual, buffer, 1);
+                  send_message_to_all_clients(clients, client, actual, buffer);
                }
                else 
                {
@@ -126,7 +123,8 @@ static void app(void)
                   char bufferCopy2[strlen(buffer)];
                   char* check_if_at = strtok(strcpy(bufferCopy,buffer), "@");
                   char* check_command = strtok(strcpy(bufferCopy2,buffer), " ");
-                  if (strlen(check_if_at)==strlen(buffer)-1)
+                  if (strlen(check_if_at)==strlen(buffer)-1) 
+                  //if there is a '@' found, check_if_at variable is the same as the buffer for some reason
                   {
                      char* receiver_name = strtok(check_if_at, " ");                        
                      char* message_to_send = strtok(NULL,"\n");
@@ -164,6 +162,9 @@ static void app(void)
 }
 
 static int connect_client(Client* client, char* buffer) //Client pointer to modify it
+/*Try to login (if the nickname/password matches an existing one in the users_informations file), or else
+refuse connection if the nickname exists but the password doesn't match, or else sign in the client if
+the nickname is new*/
 {
    char* nickname = strtok(buffer, "/");
    char* password = strtok(NULL, "\n");
@@ -218,6 +219,7 @@ static void remove_client(Client *clients, int to_remove, int *actual)
 }
 
 static void print_clients_list(Client* connected_clients, Client caller, int nb_connected_clients)
+/*Print all the connected clients names to the caller*/
 {
    char print_message[BUF_SIZE] = "";
    strcpy(print_message,"List of connected clients :\n");
@@ -231,6 +233,7 @@ static void print_clients_list(Client* connected_clients, Client caller, int nb_
 }
 
 static void print_groups_list(Client caller)
+/*Print all the groups the caller belongs to, by searching his/her nickname in the groups_informations file*/
 {
    char groups_list[BUF_SIZE]="";
    FILE* groups_file_ptr = fopen("../Infos/groups_informations.txt", "a+");
@@ -256,9 +259,10 @@ static void print_groups_list(Client caller)
 }
 
 static void print_options_list(Client caller)
+/*Print all the possible options to the caller*/
 {  
    char* message = ("'@member|groupname message' : Send a message to a person|group\n");
-   char* group_creation = ("'#C groupname member1,member2,memberX message' : Create a new discussion group\n");
+   char* group_creation = ("'#C groupname other_member1,other_member2,other_memberX message' : Create a new discussion group\n");
    char* group_list = ("'#G' : See the list of groups you are a member of\n");
    char* clients_list = ("'#L' : See the list of connected clients\n");
    char* options_list = ("'#O' : See the list of options\n");
@@ -273,6 +277,8 @@ static void print_options_list(Client caller)
 }
 
 static void print_connection_history (Client client)
+/*Print all the history of messages the caller received (in groups or private discussions) while he/she was
+logout (in 'Historiques' directory). Remove the history file at the end, to reset it.*/
 {
    char history_file[BUF_SIZE] = "../Historiques/";
    strcat(history_file, client.name);
@@ -292,6 +298,7 @@ static void print_connection_history (Client client)
       fclose(fptr);
       strcat(print_message, "\n");
       write_client(client.sock, print_message);
+      remove(history_file); //Delete the logout history file
    } 
    else
    {
@@ -300,8 +307,10 @@ static void print_connection_history (Client client)
 }
 
 static void write_message_to_disconnected_client(char* sender_name, char* receiver_name, char* message)
+/* Write private message to disconnected client, both in the private discussion file (in 'Discussions'
+directory), and in the client history ('Historiques' directory)*/
 {
-   write_discution_in_file_private("../Discussions/", receiver_name, sender_name, message);
+   write_discussion_in_file_private("../Discussions/", receiver_name, sender_name, message);
    char history_file[BUF_SIZE] = "../Historiques/";
    strcat(history_file, receiver_name);
    strcat(history_file, ".txt");
@@ -313,6 +322,7 @@ static void write_message_to_disconnected_client(char* sender_name, char* receiv
 }
 
 static void write_group_message_to_disconnected_client(char* sender_name, char* receiver_name, char* group_name, char* message)
+/* Write group message to disconnected client, in the client history ('Historiques' directory)*/
 {
    char history_file[BUF_SIZE] = "../Historiques/";
    strcat(history_file, receiver_name);
@@ -325,6 +335,11 @@ static void write_group_message_to_disconnected_client(char* sender_name, char* 
 }
 
 static void create_group(char* buffer, Client* connected_clients, Client sender, int nb_connected_clients)
+/* Create a new group made of connected clients or disconnected ones, or a combination of both.
+We first verify that the group name isn't taken, else we abort its creation. Then, we look for the group
+members in the users_informations file, and create a list of connected ones, and a list of disconnected 
+ones (as the disconnected clients don't have socket, they are just a char*). If all the members exist, we
+create the group, and send messages to the members (either directly or in their history)*/
 {
    Client group_members[MAX_CLIENTS];
    char disconnected_group_members[MAX_CLIENTS][BUF_SIZE];
@@ -337,6 +352,20 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
    char group_name[BUF_SIZE];
    strcpy(group_name, temp);
    rest = strtok(NULL,"\n");
+   FILE* groups_file_ptr = fopen("../Infos/groups_informations.txt", "a+"); //Check if the group name already exists
+   char groups_file_buffer[BUF_SIZE]="";
+   while(!feof(groups_file_ptr))
+   {
+      strcpy(groups_file_buffer, "");
+      fgets(groups_file_buffer, BUF_SIZE, groups_file_ptr); 
+      strtok(groups_file_buffer, "=");
+      if (strcmp(groups_file_buffer, group_name)==0)
+      {
+         write_client(sender.sock,"Group name already exists\nGroup creation aborted");
+         return;
+      }
+   }
+   fclose(groups_file_ptr);
    strcpy(temp, rest);
    char* current_person = strtok(temp, ",");
    rest = strtok(NULL,"\n");
@@ -455,7 +484,8 @@ static void create_group(char* buffer, Client* connected_clients, Client sender,
 
 }
 
-static void write_discution_in_file_private(char* path, char* receiver_name, char* sender_name, char* message)
+static void write_discussion_in_file_private(char* path, char* receiver_name, char* sender_name, char* message)
+/*Write the message in the private conversation file (placed in 'Discussions' directory)*/
 {
    time_t t = time(NULL);
    struct tm tm = *localtime(&t);
@@ -470,37 +500,37 @@ static void write_discution_in_file_private(char* path, char* receiver_name, cha
       first_name = sender_name;
       second_name = receiver_name;
    }
-   char *concatSend = (char*)malloc(strlen(path)+strlen(first_name)+1+strlen(second_name)+5);
-   memcpy( concatSend, path, strlen(path) );
-   memcpy( concatSend+strlen(path),first_name, strlen(first_name) );
-   memcpy( concatSend+strlen(path)+strlen(first_name), ";" ,1 );
-   memcpy( concatSend+strlen(path)+strlen(first_name)+1, second_name ,strlen(second_name) );
-   memcpy( concatSend+strlen(path)+strlen(first_name)+1+strlen(second_name), ".txt" ,4 );
-   concatSend[strlen(path)+strlen(first_name)+1+strlen(second_name)+4] = '\0';
-   
+   char concatSend[BUF_SIZE]="";
+   strcpy(concatSend, path);
+   strcat(concatSend, first_name);
+   strcat(concatSend, ";");
+   strcat(concatSend, second_name);
+   strcat(concatSend, ".txt");
    FILE* fptr= fopen(concatSend, "a+");
    fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender_name, message);
    fclose(fptr);
 }
 
 
-static void write_discution_in_file_group(char* path, char* group_name, char* sender_name, char* message)
+static void write_discussion_in_file_group(char* path, char* group_name, char* sender_name, char* message)
+/*Write the message in the group file (placed in 'Groupes' directory)*/
 {
    time_t t = time(NULL);
    struct tm tm = *localtime(&t);
-   char *concatSend = (char*)malloc(strlen(path)+strlen(group_name)+5);
-   memcpy( concatSend, path, strlen(path) );
-   memcpy( concatSend+strlen(path), group_name ,strlen(group_name) );
-   memcpy( concatSend+strlen(path)+strlen(group_name), ".txt" ,4 );
-   concatSend[strlen(path)+strlen(group_name)+4] = '\0';
+   char concatSend[BUF_SIZE]="";
+   strcpy(concatSend, path);
+   strcat(concatSend, group_name);
+   strcat(concatSend, ".txt");
    FILE* fptr=fopen(concatSend, "a+");
    fprintf(fptr, "%d-%02d-%02d %02d:%02d:%02d - %s : %s\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, sender_name, message);
    fclose(fptr);
 }
 
 static void send_message_with_at(Client* connected_clients, int nb_connected_clients, Client sender, char* receiver_name, char* message)
-/*We check if the '@' is intended for a user or a group, and we send the message to the connected user 
-or connected group members. For those who aren't connected, we directly write into the discussion file.
+/*We check if the '@' is intended for a user or a group, and we send the message directly to the connected user 
+or connected group members. We also write the message in the discussion/group file ('in 'Discussions' directory for 
+private conversation or 'Groupes' for group conversation). For those who aren't connected, we directly write into the
+history file, which will be consulted at the re-connection.
 If neither the receiver nor the group can be found, we abort sending an error message.*/
 {
    FILE* users_file_ptr = fopen("../Infos/users_informations.txt", "a+");
@@ -516,7 +546,7 @@ If neither the receiver nor the group can be found, we abort sending an error me
             if (strcmp(connected_clients[i].name, receiver_name)==0) //Receiver is connected
             {
                fclose(users_file_ptr);
-               send_message_to_one_client(connected_clients[i], sender, message, 0);
+               send_message_to_one_client(connected_clients[i], sender, message);
                return;
             }
          }
@@ -535,6 +565,14 @@ If neither the receiver nor the group can be found, we abort sending an error me
       fgets(groups_file_buffer, BUF_SIZE, groups_file_ptr);
       if (strstr(groups_file_buffer, receiver_name)!=NULL) //If the receiver is an existing group
       {
+         char verifier[BUF_SIZE];
+         strcpy(verifier, sender.name);
+         strcat(verifier,",");
+         if (strstr(groups_file_buffer, verifier)==NULL)
+         {
+            write_client(sender.sock, "You are not a member of this group\nMessage not sent\n");
+            return;
+         }
          strtok(groups_file_buffer, "=");
          int nb_receivers = atoi(strtok(NULL,": "));
          Client group_members[MAX_CLIENTS];
@@ -567,7 +605,7 @@ If neither the receiver nor the group can be found, we abort sending an error me
          }
          else
          {
-            write_discution_in_file_group("../Groupes/", receiver_name, sender.name, message);
+            write_discussion_in_file_group("../Groupes/", receiver_name, sender.name, message);
          }
          return;
       }
@@ -579,31 +617,21 @@ If neither the receiver nor the group can be found, we abort sending an error me
    write_client(sender.sock, error_message);
 }
 
-static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer, char from_server)
+static void send_message_to_all_clients(Client *clients, Client sender, int actual, const char *buffer)
+/* Send a message directly to all connected clients, only used when another client or the server disconnects */
 {
-   int i = 0;
-   char message[BUF_SIZE];
-   message[0] = 0;
-   char heading[BUF_SIZE];
-   strcpy(heading,sender.name);
-   strncat(heading," to all",sizeof heading - strlen(heading) - 1);
-   if(from_server == 0)
-   {
-      strncat(heading, " : ", sizeof heading - strlen(heading) - 1);
-   }
-      strncat(message, buffer, sizeof message - strlen(message) - 1);
-   for(i = 0; i < actual; i++)
+   for(int i = 0; i < actual; i++)
    {
       /* we don't send message to the sender */
       if(sender.sock != clients[i].sock)
       {
-         write_client(clients[i].sock, heading);
-         write_client(clients[i].sock, message);
+         write_client(clients[i].sock, buffer);
       }
    }
 }
 
 static void send_message_to_a_group(Group group, Client sender, const char* buffer, int group_creation)
+/* Send message directly to group members and also write it in the group file (in 'Groupes' directory)*/
 {
    char full_message[BUF_SIZE]="";
    char message_body[BUF_SIZE]="";
@@ -634,10 +662,11 @@ static void send_message_to_a_group(Group group, Client sender, const char* buff
          write_client(group.group_members[j].sock, full_message);
       }
    }
-   write_discution_in_file_group(path_of_msg, group.group_name, sender.name, message_body);
+   write_discussion_in_file_group(path_of_msg, group.group_name, sender.name, message_body);
 }
 
-static void send_message_to_one_client(Client receiver, Client sender, const char *buffer, char from_server)
+static void send_message_to_one_client(Client receiver, Client sender, const char *buffer)
+/* Send message directly to the correspondent and also write it in the private conversation file (in 'Discussions' directory)*/
 {
    char message[BUF_SIZE];
    char heading[BUF_SIZE];
@@ -647,17 +676,14 @@ static void send_message_to_one_client(Client receiver, Client sender, const cha
    /* we don't send message to the sender */
    if(sender.sock != receiver.sock)
    {
-      if(from_server == 0)
-      {
-         strncpy(heading, sender.name, BUF_SIZE - 1);
-         strncat(heading, " to ", sizeof heading - strlen(heading) - 1);
-         strncat(heading, receiver.name, sizeof heading - strlen(heading) - 1);
-         strncat(heading, " : ", sizeof heading - strlen(heading) - 1);
-      }
+      strncpy(heading, sender.name, BUF_SIZE - 1);
+      strncat(heading, " to ", sizeof heading - strlen(heading) - 1);
+      strncat(heading, receiver.name, sizeof heading - strlen(heading) - 1);
+      strncat(heading, " : ", sizeof heading - strlen(heading) - 1);
       strncat(message, buffer, sizeof message - strlen(message) - 1);
       write_client(receiver.sock, heading);
       write_client(receiver.sock, message);
-      write_discution_in_file_private(path_of_msg, receiver.name, sender.name, message);
+      write_discussion_in_file_private(path_of_msg, receiver.name, sender.name, message);
    }
 }
 
