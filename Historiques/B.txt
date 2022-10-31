@@ -1,28 +1,3 @@
-2022-10-30 21:54:56 - C to Gruppetto : lalslas
-2022-10-30 21:56:03 - A to Gruppetto : llassj
-2022-10-30 23:41:42 - C to B : las
-2022-10-30 23:41:42 - C to B : las
-2022-10-30 23:44:00 - C to B : lalso
-2022-10-30 23:44:00 - C to B : lalso
-2022-10-30 23:44:35 - C to B : llasop
-2022-10-30 23:44:35 - C to B : llasop
-2022-10-30 23:46:03 - C to B : lals
-2022-10-30 23:46:03 - C to B : lals
-2022-10-30 23:47:06 - C to B : masp
-2022-10-30 23:47:06 - C to B : masp
-2022-10-30 23:48:23 - C to B : las
-2022-10-30 23:48:23 - C to B : las
-2022-10-30 23:49:48 - C to prout : lals
-2022-10-30 23:49:48 - C to prout : lals
-2022-10-30 23:51:10 - C to prout : asp
-2022-10-30 23:51:10 - C to prout : asp
-2022-10-30 23:52:14 - C to prout : laso
-2022-10-30 23:52:14 - C to prout : laso
-2022-10-30 23:53:18 - C to prout : laso
-2022-10-30 23:56:24 - C to prout : laso
-2022-10-30 23:57:00 - C to prout : laso
-2022-10-30 23:58:47 - C to prout : laso
-2022-10-30 23:59:21 - C to prout : lasoa
 2022-10-31 00:33:52 - C to you : C is writing to B
 2022-10-31 00:34:24 - C to mama : text in this deserted group
 2022-10-31 00:36:58 - C to thirdGroup : vous allez bien ?
